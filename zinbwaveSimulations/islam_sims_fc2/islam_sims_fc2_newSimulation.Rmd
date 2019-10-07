@@ -14,7 +14,7 @@ output:
 This document uses Fanny's original simulation code in `islam_sims_fc2.Rmd' and has been adapted by Koen to adopt the new simulation framework.
 
 ```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE, warning=FALSE}
-setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
+# setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
 library(zinbwave)
 library(BiocParallel)
@@ -33,13 +33,13 @@ library(ggplot2)
 library(cowplot)
 # use new simulation.
 #library(zingeR)
-pathToParentFolder="~/Dropbox/phdKoen/singleCell/zinbwavezingerGitHub/zinbwaveZinger/"
-source(paste0(pathToParentFolder,"zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R"))
+# pathToParentFolder="~/Dropbox/phdKoen/singleCell/zinbwavezingerGitHub/zinbwaveZinger/"
+source("../../zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R")
 ```
 
 
 ```{r cores}
-NCORES <- 2
+NCORES <- 8
 registerDoParallel(NCORES)
 register(DoparParam())
 ```
@@ -395,15 +395,15 @@ core <- SummarizedExperiment(simDataIslam$counts,
 ```
 
 ```{r zinbcommondisp}
-#zinb_c <- zinbFit(core, X = '~ grp', commondispersion = TRUE, epsilon=1e12)
-#save(zinb_c, file = 'zinb-common-disp-fc2-eps12.rda')
-load('/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/zinb-common-disp-fc2-eps12.rda')
+# zinb_c <- zinbFit(core, X = '~ grp', commondispersion = TRUE, epsilon=1e12)
+# save(zinb_c, file = 'zinb-common-disp-fc2-eps12.rda')
+load('zinb-common-disp-fc2-eps12.rda')
 ```
 
 ```{r zinbgenewisedisp}
-#zinb_g <- zinbFit(core, X = '~ grp', commondispersion = FALSE, epsilon=1e12)
-#save(zinb_g, file = 'zinb-genewise-disp-fc2.rda')
-load('/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/zinb-genewise-disp-fc2.rda')
+# zinb_g <- zinbFit(core, X = '~ grp', commondispersion = FALSE, epsilon=1e12)
+# save(zinb_g, file = 'zinb-genewise-disp-fc2.rda')
+load('zinb-genewise-disp-fc2.rda')
 ```
 
 # Compare dispersion estimates
@@ -412,22 +412,25 @@ counts = simDataIslam$counts
 myfct = list(DESeq2 = DESeq2,
              edgeR = edgeR,
              limmavoom = limma,
-             MAST = MAST,
-             NODES = NODES,
-             scde = scde,
-             metagenomeSeq = metagenomeSeq)
+             MAST = MAST
+             # NODES = NODES,
+             # scde = scde,
+             # metagenomeSeq = metagenomeSeq
+        )
 # if we additionally load Seurat, too many packages are loaded and the DLL limit is reached. We ran Seurat in a separate session and will add it in this session.
 
 
 par(mfrow = c(2,2))
 ylim = c(0, 11)
 xlim = c(0, 16)
-res = lapply(myfct, function(fct){
+res = lapply(names(myfct), function(fname){
+  fct = myfct[[fname]]
+  message(paste0("running ", fname))
   fct(counts = counts, group = grp, ylim = ylim, xlim = xlim)
 })
-load("~/seuratResIslam.rda")
-res[[8]] = seuratRes
-names(res)[8] = "Seurat"
+# load("seuratResIslam.rda")
+# res[[8]] = seuratRes
+# names(res)[8] = "Seurat"
 res[['ZINB-WaVE_DESeq2_common']] = zinbwave_DESeq2(counts, grp, zinb_c)
 res[['ZINB-WaVE_edgeR_common']]  = zinbwave_edgeR(counts, grp, zinb_c, ylim=ylim, main = 'ZINB-WaVE, common dispersion', xlim = xlim)
 res[['ZINB-WaVE_limmavoom_common']]  = zinbwave_limma(counts, grp, zinb_c)
@@ -441,10 +444,14 @@ res[["zingeR_DESeq2"]] = zingeR_DESeq2(counts=simDataIslam$counts, group=grp)
 ```
 
 ```{r res}
-#load("resIslamFc2.rda")
-res = lapply(res, as.data.frame)
-for(k in 1:length(res)) res[[k]]$padj[is.na(res[[k]]$padj)] = 1
+load("resIslamFc2.rda")
+# res = lapply(res, as.data.frame)
+#names(res) = c(names(myfct), names(res)[5:length(res)]
+# for(k in 1:length(res)) res[[k]]$padj[is.na(res[[k]]$padj)] = 1
+#save(res, file="../../results/resIslamFc2.rda")
 ```
+
+
 
 ## Compare weights estimates
 
@@ -465,6 +472,17 @@ zingeR_DESeq2_weights <- zeroWeightsLS(counts = counts, design = design,
 ``` -->
 
 ```{r zinbwaveW}
+computeZinbwaveWeights <- function(zinb, counts){
+  mu <- getMu(zinb)
+  pi <- getPi(zinb)
+  theta <- getTheta(zinb)
+  theta_mat <- matrix(rep(theta, each = ncol(counts)), ncol = nrow(counts))
+  nb_part <- dnbinom(t(counts), size = theta_mat, mu = mu)
+  zinb_part <- pi * ( t(counts) == 0 ) + (1 - pi) *  nb_part
+  zinbwg <- ( (1 - pi) * nb_part ) / zinb_part
+  t(zinbwg)
+}
+
 zinbwave_c_weights <- computeZinbwaveWeights(zinb_c, counts)
 zinbwave_g_weights <- computeZinbwaveWeights(zinb_g, counts)
 ```
@@ -610,32 +628,32 @@ plot_fdrtprcurve(cobraplot, pointsize=1) +xlab("FDP")
 ## Distribution of pvalues
 
 ```{r islamPvalues}
-png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/pvalsIslamSim.png", width=9,height=9, units="in", res=300)
+# png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/pvalsIslamSim.png", width=9,height=9, units="in", res=300)
 ylim = c(0, 3700)
 par(mfrow = c(4,4), mar=c(3,2,1,1))
 hist = lapply(1:length(res), function(i){
   hist(res[[i]][,'pval'], main = names(res)[i], ylim = ylim, xlab = 'pvalues', breaks=seq(0,1,0.05))
 })
-dev.off()
+# dev.off()
 ```
 
 
 ## BCV plots on simulated dataset
 
-```{r bcvSim}
-dSim=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts)))
-dSim=estimateDisp(dSim,design=model.matrix(~grp),prior.df=0)
+<!-- ```{r bcvSim} -->
+<!-- dSim=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts))) -->
+<!-- dSim=estimateDisp(dSim,design=model.matrix(~grp),prior.df=0) -->
 
-load('/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/zinb-common-disp-fc2-eps12.rda')
-w = computeObservationalWeights(zinb_c,simDataIslam$counts)
-dSimW=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts)))
-dSimW$weights = w
-dSimW=estimateDisp(dSimW,design=model.matrix(~grp),prior.df=0)
+<!-- load('/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/zinb-common-disp-fc2-eps12.rda') -->
+<!-- w = computeObservationalWeights(zinb_c,simDataIslam$counts) -->
+<!-- dSimW=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts))) -->
+<!-- dSimW$weights = w -->
+<!-- dSimW=estimateDisp(dSimW,design=model.matrix(~grp),prior.df=0) -->
 
-png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/bcvSimIslam.png", width=9,height=9, units="in", res=300)
-par(mfrow=c(1,2))
-plotBCV(dSim, ylim=c(0,10), xlim=c(2,15))
-plotBCV(dSimW, ylim=c(0,10), xlim=c(2,15))
-dev.off()
+<!-- png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/bcvSimIslam.png", width=9,height=9, units="in", res=300) -->
+<!-- par(mfrow=c(1,2)) -->
+<!-- plotBCV(dSim, ylim=c(0,10), xlim=c(2,15)) -->
+<!-- plotBCV(dSimW, ylim=c(0,10), xlim=c(2,15)) -->
+<!-- dev.off() -->
 
-```
+<!-- ``` -->

@@ -14,7 +14,7 @@ output:
 This document uses Fanny's original simulation code in `islam_sims_fc2.Rmd' and has been adapted by Koen to adopt the new simulation framework.
 
 ```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE, warning=FALSE}
-setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
+# setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
 library(zinbwave)
 library(BiocParallel)
@@ -33,13 +33,13 @@ library(ggplot2)
 library(cowplot)
 # use new simulation.
 #library(zingeR)
-pathToParentFolder="~/Dropbox/phdKoen/singleCell/zinbwavezingerGitHub/zinbwaveZinger/"
-source(paste0(pathToParentFolder,"zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R"))
+# pathToParentFolder="~/Dropbox/phdKoen/singleCell/zinbwavezingerGitHub/zinbwaveZinger/"
+source("../../zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R")
 ```
 
 
 ```{r cores}
-NCORES <- 2
+NCORES <- 8
 registerDoParallel(NCORES)
 register(DoparParam())
 ```
@@ -187,8 +187,8 @@ pp = COBRAData(pval = as.data.frame(do.call(cbind, lapply(res, '[[', 1))),
                 truth = data.frame(status = trueDE))
 cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
 cobraplot <- prepare_data_for_plot(cobraperf)
-png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/islamSimDESeq2.png", width=7,height=8, units="in", res=300)
+# png("~/Dropbox/phdKoen/singleCell/zinbwaveZinger/plots2/islamSimDESeq2.png", width=7,height=8, units="in", res=300)
 plot_fdrtprcurve(cobraplot, pointsize=1) + xlab("FDP")
-dev.off()
+# dev.off()
 
 ```

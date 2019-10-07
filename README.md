@@ -1,5 +1,20 @@
 # Data analysis for the ZINB-WaVE / zingeR paper
 
+What I needed to to to run this repo:
+
+* download datasets from *conquer*.
+* (preprocessed) 10x dataset not available.
+
+* create conda env
+* (run `evaluateCountSimQC.Rmd` to prepare the datasets. ) --> probably not even necessary.
+* run `islam_sims_fc2_newSimulation.Rmd` to run the benchmark.
+
+
+
+
+
+# Original README
+
 This repository is designed to allow interested people to reproduce the results and figures of our paper called 'Observation weights unlock bulk RNA-seq tools for zero inflation and single-cell applications', currently on bioRxiv at https://www.biorxiv.org/content/early/2018/01/18/250126.
 All code in the repository is distributed under the GPL-3 license.
 
@@ -13,39 +28,39 @@ To be able to run the code in this repo, it is required to have `R` (>=3.4) and 
 
 ### R packages
 
-- [zingeR](https://github.com/statOmics/zingeR)  
+- [zingeR](https://github.com/statOmics/zingeR)
 - countsimQC
-- Seurat  
-- ggplot2  
-- RColorBrewer  
-- devtools  
-- scales  
-- gridBase  
-- grid  
-- Matrix  
-- dplyr  
-- plyr  
-- cowplot  
-- Rtsne  
+- Seurat
+- ggplot2
+- RColorBrewer
+- devtools
+- scales
+- gridBase
+- grid
+- Matrix
+- dplyr
+- plyr
+- cowplot
+- Rtsne
 - FNN
-- rARPACK 
+- rARPACK
 
 ### Bioconductor packages
 
-- zinbwave  
-- limma  
-- edgeR  
-- DESeq2  
-- BiocParallel  
-- doParallel 
-- Biobase   
-- scde  
-- SingleCellExperiment  
+- zinbwave
+- limma
+- edgeR
+- DESeq2
+- BiocParallel
+- doParallel
+- Biobase
+- scde
+- SingleCellExperiment
 - MAST
-- [xCell](https://github.com/dviraran/xCell)  
-- fgsea  
-- clusterExperiment  
-- GSEABase  
+- [xCell](https://github.com/dviraran/xCell)
+- fgsea
+- clusterExperiment
+- GSEABase
 
 
 ## Getting started
@@ -64,7 +79,7 @@ To generate the plots related to the false positive rate control, run [FPR_mocks
 
 ### Real data
 
-To generate the plots related to the analysis of the 10x Genomics PBMC dataset, first run [createDataObject.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/createdata/createDataObject.Rmd) to create the data files. Then, to generate the data when the clustering is done using PCA, run both [de_seurat.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringPCA/de_seurat.Rmd) and [de_othermethods.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringPCA/de_othermethods.Rmd). There are two files to run instead of one unique file because packages `Seurat` and `zinbwave` load both many packages and R complains that there are too many packages loaded. To generate the plots when the clustering is done using ZINB-WaVE, run [dimredZinbwave.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/dimredZinbwave.Rmd), [clusterW.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/clusterW.Rmd), and then [de.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/de.Rmd). Finally, to generate the plots, run [plotPaper.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/plotPaper.Rmd).  
+To generate the plots related to the analysis of the 10x Genomics PBMC dataset, first run [createDataObject.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/createdata/createDataObject.Rmd) to create the data files. Then, to generate the data when the clustering is done using PCA, run both [de_seurat.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringPCA/de_seurat.Rmd) and [de_othermethods.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringPCA/de_othermethods.Rmd). There are two files to run instead of one unique file because packages `Seurat` and `zinbwave` load both many packages and R complains that there are too many packages loaded. To generate the plots when the clustering is done using ZINB-WaVE, run [dimredZinbwave.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/dimredZinbwave.Rmd), [clusterW.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/clusterW.Rmd), and then [de.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/clusteringW/de.Rmd). Finally, to generate the plots, run [plotPaper.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/plotPaper.Rmd).
 
 To generate the results and plots for the differential expression analysis between the cell types identified in the Usoskin dataset, run the [deAnalysis.Rmd](https://github.com/statOmics/zinbwaveZinger/blob/master/realdata/usoskin/deAnalysis.Rmd) file.
 

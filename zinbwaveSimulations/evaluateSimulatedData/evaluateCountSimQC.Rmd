@@ -9,7 +9,7 @@ R -e "rmarkdown::render('evaluateZingeRSims_v2_clean.Rmd')"
 
 
 ```{r preprocess}
-setwd("~/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zingeRsimulationFunctions/evaluate/")
+# setwd("~/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zingeRsimulationFunctions/evaluate/")
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
 library(Biobase)
 library(edgeR)
@@ -27,7 +27,7 @@ library(SummarizedExperiment)
 library(countsimQC)
 # use new simulation.
 #library(zingeR)
-source("../simulationHelpFunctions_v7_diffInZero.R")
+source("../../zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R")
 # islam
 load("../../datasets/islam.rda")
 islamCompare = islam[rowSums(islam>0)>=1,]
@@ -42,9 +42,9 @@ dds_origIslam <- DESeqDataSetFromMatrix(countData = islamCompare[rowsIslam,],
                                   design = ~ group)
 
 ## trapnell
-trapnellAssay72 <- readRDS("/Users/koenvandenberge/PhD_Data/singleCell/conquer/GSE52529-GPL11154.rds")
+trapnellAssay72 <- readRDS("../../datasets/GSE52529-GPL11154.rds")
 trapnellAssay72 = updateObject(trapnellAssay72)
-trapnellAssay <- readRDS("/Users/koenvandenberge/PhD_Data/singleCell/conquer/GSE52529-GPL16791.rds")
+trapnellAssay <- readRDS("../../datasets/GSE52529-GPL16791.rds")
 trapnellAssay = updateObject(trapnellAssay)
 trapnellAssay48 <- trapnellAssay[,colData(trapnellAssay)[,"characteristics_ch1.1"] == "hour post serum-switch: 48"]
 countsTrapnell72 <- round(assay(experiments(trapnellAssay72)$gene,"count"))
@@ -68,24 +68,24 @@ set.seed(2)
 rowsTrapnell = sample(nrow(countsTrapnellCompare),nrow(countsTrapnell))
 dds_origTrapnell <- DESeqDataSetFromMatrix(countData = countsTrapnellCompare[rowsTrapnell,],
                                   colData = data.frame(group = timePoint, sample = colnames(countsTrapnell), row.names = colnames(countsTrapnell), stringsAsFactors = FALSE), design = ~ group)
-### 10x 4k PBMC dataset
-load("~/tenxPBMC.rda") #from `create-se-object.Rmd` file from Fanny.
-library(cellrangerRkit)
-analysis_results <- load_cellranger_analysis_results("../../..")
-cl <- analysis_results[["clustering"]][["graphclust"]][,'Cluster']
-names(cl) <- analysis_results[["clustering"]][["graphclust"]][,'Barcode']
-selectedCells = cl %in% 2:3
-se = se[,selectedCells]
-celltype = as.factor(cl[selectedCells])
-tenxCompare = assays(se)$counts
-
-#filter genes
-set.seed(23984)
-keep = rowMeans(assays(se)$counts>0)>=0.01 #expression in 1% of cells.
-se = se[keep,]
-rowsTenx = sample(nrow(tenxCompare),nrow(se))
-dds_origTenx <- DESeqDataSetFromMatrix(countData = tenxCompare[rowsTenx,],
-                                  colData = data.frame(celltype = celltype, sample = colnames(se), row.names = colnames(se), stringsAsFactors = FALSE), design = ~ celltype)
+# ### 10x 4k PBMC dataset
+# load("~/tenxPBMC.rda") #from `create-se-object.Rmd` file from Fanny.
+# library(cellrangerRkit)
+# analysis_results <- load_cellranger_analysis_results("../../..")
+# cl <- analysis_results[["clustering"]][["graphclust"]][,'Cluster']
+# names(cl) <- analysis_results[["clustering"]][["graphclust"]][,'Barcode']
+# selectedCells = cl %in% 2:3
+# se = se[,selectedCells]
+# celltype = as.factor(cl[selectedCells])
+# tenxCompare = assays(se)$counts
+# 
+# #filter genes
+# set.seed(23984)
+# keep = rowMeans(assays(se)$counts>0)>=0.01 #expression in 1% of cells.
+# se = se[keep,]
+# rowsTenx = sample(nrow(tenxCompare),nrow(se))
+# dds_origTenx <- DESeqDataSetFromMatrix(countData = tenxCompare[rowsTenx,],
+#                                   colData = data.frame(celltype = celltype, sample = colnames(se), row.names = colnames(se), stringsAsFactors = FALSE), design = ~ celltype)
 ```
 
 
@@ -147,29 +147,29 @@ dds_zingerTrapnell <- DESeqDataSetFromMatrix(countData = trapnellSim$counts, col
 countsimQCReport(ddsList=list(original=dds_origTrapnell,zingeR=dds_zingerTrapnell), outputFile="~/trapnellEvalNorm.html", description="evaluation of simulated Trapnell dataset",
 calculateStatistics=FALSE)
 
-### 10x 4k pbmc dataset.
-
-## estimate parameters
-paramsTenx = getDatasetMoMPositive(counts=assays(se)$counts)
-
-#source("./NBsimSingleCellNormalizedLambda.R")
-nSamples=ncol(se)
-grp=as.factor(rep(0:1, each = nSamples/2)) #two-group comparison
-nTags=nrow(se) #nr of features
-set.seed(11)
-DEind = sample(1:nTags,floor(nTags*.1),replace=FALSE) #10% DE
-fcSim=(2 + rexp(length(DEind), rate = 1/2)) #fold changes
-libSizes=sample(colSums(assays(se)$counts),nSamples,replace=TRUE) #library sizes
-tenxSim <- NBsimSingleCell(foldDiff = fcSim, ind = DEind,
-                          dataset = assays(se)$counts, nTags = nTags,
-                          group = grp,
-                          verbose = TRUE, params = paramsTenx,
-                          lib.size = libSizes, normalizeLambda=TRUE)
-
-
-dds_zingerTenx <- DESeqDataSetFromMatrix(countData = tenxSim$counts, colData = data.frame(grp=grp, sample = colnames(tenxSim$counts), row.names = colnames(tenxSim$counts), stringsAsFactors = FALSE), design = ~ grp)
-
-countsimQCReport(ddsList=list(original=dds_origTenx,zingeR=dds_zingerTenx), outputFile="~/tenxEval.html", description="evaluation of simulated 10X PBMC dataset", calculateStatistics=FALSE)
+# ### 10x 4k pbmc dataset.
+# 
+# ## estimate parameters
+# paramsTenx = getDatasetMoMPositive(counts=assays(se)$counts)
+# 
+# #source("./NBsimSingleCellNormalizedLambda.R")
+# nSamples=ncol(se)
+# grp=as.factor(rep(0:1, each = nSamples/2)) #two-group comparison
+# nTags=nrow(se) #nr of features
+# set.seed(11)
+# DEind = sample(1:nTags,floor(nTags*.1),replace=FALSE) #10% DE
+# fcSim=(2 + rexp(length(DEind), rate = 1/2)) #fold changes
+# libSizes=sample(colSums(assays(se)$counts),nSamples,replace=TRUE) #library sizes
+# tenxSim <- NBsimSingleCell(foldDiff = fcSim, ind = DEind,
+#                           dataset = assays(se)$counts, nTags = nTags,
+#                           group = grp,
+#                           verbose = TRUE, params = paramsTenx,
+#                           lib.size = libSizes, normalizeLambda=TRUE)
+# 
+# 
+# dds_zingerTenx <- DESeqDataSetFromMatrix(countData = tenxSim$counts, colData = data.frame(grp=grp, sample = colnames(tenxSim$counts), row.names = colnames(tenxSim$counts), stringsAsFactors = FALSE), design = ~ grp)
+# 
+# countsimQCReport(ddsList=list(original=dds_origTenx,zingeR=dds_zingerTenx), outputFile="~/tenxEval.html", description="evaluation of simulated 10X PBMC dataset", calculateStatistics=FALSE)
 
 
 ```
