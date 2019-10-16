@@ -16,6 +16,7 @@ This document uses Fanny's original simulation code in `islam_sims_fc2.Rmd' and 
 ```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE, warning=FALSE}
 # setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
 knitr::opts_chunk$set(fig.align="center", cache=TRUE, error=FALSE, message=FALSE, warning=TRUE)
+library(reticulate)
 library(zinbwave)
 library(BiocParallel)
 library(doParallel)
@@ -35,6 +36,16 @@ library(cowplot)
 #library(zingeR)
 # pathToParentFolder="~/Dropbox/phdKoen/singleCell/zinbwavezingerGitHub/zinbwaveZinger/"
 source("../../zingeRsimulationFunctions/simulationHelpFunctions_v7_diffInZero.R")
+knitr::knit_engines$set(python = reticulate::eng_python)
+reticulate::py_available(TRUE)
+# bug in rstudio/reticulate: 
+matplotlib <- import("matplotlib")
+matplotlib$use("Agg", force = TRUE)
+```
+
+```{python}
+import diffxpy.api as de
+import pandas as pd
 ```
 
 
@@ -59,7 +70,9 @@ The scRNA-seq simulation is based on the Islam mouse dataset, which compares 48 
 data(islamEset, package = "zingeR")
 islamHlp=exprs(islamEset)[9:nrow(exprs(islamEset)),] #first 8 are spike-ins.
 cellType=pData(islamEset)[,"cellType"]
-paramsIslam = getDatasetMoMPositive(counts = islamHlp)
+# paramsIslam = getDatasetMoMPositive(counts = islamHlp)
+# save(paramsIslam, file="./paramsIslam.rda")
+load("./paramsIslam.rda")
 ```
 
 ```{r sims}
@@ -387,6 +400,37 @@ zinbwave_limma <- function(counts, group, zinb){
 }
 ```
 
+## diffxpy
+
+
+### wald test
+```{python diffxpy}
+def wald_test(counts, group):
+  test = de.test.wald(
+    data=counts.values,
+    formula_loc="~ 1 + group",
+    factor_loc_totest="group",
+    sample_description=pd.DataFrame().assign(group=group),
+    batch_size=100,
+    training_strategy="DEFAULT",
+    dtype="float64",
+    gene_names=counts.index
+  )
+  return pd.DataFrame().assign(
+    pval=test.pval,
+    padj=test.qval
+  )
+  
+def lrt_test(counts, group):
+  
+```
+
+```{r}
+diffxpy_wald = function(counts, group, ylim = NULL, xlim=NULL) {
+  res = py$wald_test(as.data.frame(t(counts)), group)
+}
+```
+
 # Results
 
 ```{r core}
@@ -428,27 +472,36 @@ res = lapply(names(myfct), function(fname){
   message(paste0("running ", fname))
   fct(counts = counts, group = grp, ylim = ylim, xlim = xlim)
 })
+
 # load("seuratResIslam.rda")
 # res[[8]] = seuratRes
 # names(res)[8] = "Seurat"
-res[['ZINB-WaVE_DESeq2_common']] = zinbwave_DESeq2(counts, grp, zinb_c)
+#res[['ZINB-WaVE_DESeq2_common']] = zinbwave_DESeq2(counts, grp, zinb_c)
 res[['ZINB-WaVE_edgeR_common']]  = zinbwave_edgeR(counts, grp, zinb_c, ylim=ylim, main = 'ZINB-WaVE, common dispersion', xlim = xlim)
-res[['ZINB-WaVE_limmavoom_common']]  = zinbwave_limma(counts, grp, zinb_c)
-res[['ZINB-WaVE_DESeq2_genewise']] = zinbwave_DESeq2(counts, grp, zinb_g)
-res[['ZINB-WaVE_edgeR_genewise']]  = zinbwave_edgeR(counts, grp, zinb_g, ylim=ylim, main = 'ZINB-WaVE, genewise dispersion', xlim = xlim)
-res[['ZINB-WaVE_limmavoom_genewise']]  = zinbwave_limma(counts, grp, zinb_g)
-par(mfrow = c(1,1))
+#res[['ZINB-WaVE_limmavoom_common']]  = zinbwave_limma(counts, grp, zinb_c)
+#res[['ZINB-WaVE_DESeq2_genewise']] = zinbwave_DESeq2(counts, grp, zinb_g)
+#res[['ZINB-WaVE_edgeR_genewise']]  = zinbwave_edgeR(counts, grp, zinb_g, ylim=ylim, main = 'ZINB-WaVE, genewise dispersion', xlim = xlim)
+#res[['ZINB-WaVE_limmavoom_genewise']]  = zinbwave_limma(counts, grp, zinb_g)
+#par(mfrow = c(1,1))
 res[["zingeR_edgeR"]] = zingeR_edgeR(counts=simDataIslam$counts, group=grp)
-res[["zingeR_DESeq2"]] = zingeR_DESeq2(counts=simDataIslam$counts, group=grp)
+#res[["zingeR_DESeq2"]] = zingeR_DESeq2(counts=simDataIslam$counts, group=grp)
+
+save(res, file="./intermediate_res.rda")
+load("./intermediate_res.rda")
+```
+
+```{r}
+tmp_res_wald = diffxpy_wald(counts=simDataIslam$counts, group=grp)
+res[["diffxpy_wald"]] = tmp_res_wald
 
 ```
 
 ```{r res}
-load("resIslamFc2.rda")
-# res = lapply(res, as.data.frame)
-#names(res) = c(names(myfct), names(res)[5:length(res)]
-# for(k in 1:length(res)) res[[k]]$padj[is.na(res[[k]]$padj)] = 1
-#save(res, file="../../results/resIslamFc2.rda")
+res = lapply(res, as.data.frame)
+names(res) = c(names(myfct), names(res)[5:length(res)])
+for(k in 1:length(res)) res[[k]]$padj[is.na(res[[k]]$padj)] = 1
+# load("resIslamFc2.rda")
+save(res, file="../../results/resIslamFc2.rda")
 ```
 
 
@@ -469,7 +522,8 @@ design <- model.matrix(~ grp)
 zingeR_DESeq2_weights <- zeroWeightsLS(counts = counts, design = design,
                            normalization = "DESeq2_poscounts", colData = colData,
                            designFormula = ~grp, verbose = F)
-``` -->
+``` 
+-->
 
 ```{r zinbwaveW}
 computeZinbwaveWeights <- function(zinb, counts){
@@ -538,7 +592,8 @@ pp = COBRAData(pval = as.data.frame(do.call(cbind, lapply(res, '[[', 1))),
                padj = as.data.frame(do.call(cbind, lapply(res, '[[', 2))),
                 truth = data.frame(status = trueDE))
 cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
-colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4")
+colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4",
+         diffxpy_wald="dodgerblue")
 #iCOBRA converts '-' to '.'. Redo this.
 cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
 cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")
@@ -547,39 +602,39 @@ cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
 save(cobraplot,file="cobraPlotIslamAllMethods.rda")
 plot_fdrtprcurve(cobraplot, pointsize=1)
 
-#only common disp ZINB-WaVE
-pvalDf = as.data.frame(do.call(cbind, lapply(res, '[[', 1)))
-padjDf = as.data.frame(do.call(cbind, lapply(res, '[[', 2)))
-pvalDfCommon = pvalDf[,-grep(x=colnames(pvalDf), pattern="genewise")]
-padjDfCommon = padjDf[,-grep(x=colnames(padjDf), pattern="genewise")]
-pp = COBRAData(pval = pvalDfCommon,
-               padj = padjDfCommon,
-                truth = data.frame(status = trueDE))
-cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
-colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4")
-#iCOBRA converts '-' to '.'. Redo this.
-cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
-cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")
-colsCobra=colors[match(cobraNames,names(colors))]
-cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
-save(cobraplot,file="cobraplotIslam.rda")
-plot_fdrtprcurve(cobraplot, pointsize=1)
-
-#only common disp ZINB-WaVE, no ZINB-WaVE_limma-voom
-pvalDfCommon2 = pvalDfCommon[,-grep(x=colnames(pvalDfCommon), pattern="ZINB-WaVE_limmavoom")]
-padjDfCommon2 = padjDfCommon[,-grep(x=colnames(padjDfCommon), pattern="ZINB-WaVE_limmavoom")]
-pp = COBRAData(pval = pvalDfCommon2,
-               padj = padjDfCommon2,
-                truth = data.frame(status = trueDE))
-cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
-colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4")
-#iCOBRA converts '-' to '.'. Redo this.
-cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
-cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")
-colsCobra=colors[match(cobraNames,names(colors))]
-cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
-#save(cobraplot,file="cobraplotIslamNoLimma.rda")
-plot_fdrtprcurve(cobraplot, pointsize=1) +xlab("FDP")
+# #only common disp ZINB-WaVE
+# pvalDf = as.data.frame(do.call(cbind, lapply(res, '[[', 1)))
+# padjDf = as.data.frame(do.call(cbind, lapply(res, '[[', 2)))
+# pvalDfCommon = pvalDf[,-grep(x=colnames(pvalDf), pattern="genewise")]
+# padjDfCommon = padjDf[,-grep(x=colnames(padjDf), pattern="genewise")]
+# pp = COBRAData(pval = pvalDfCommon,
+#                padj = padjDfCommon,
+#                 truth = data.frame(status = trueDE))
+# cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
+# colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4")
+# #iCOBRA converts '-' to '.'. Redo this.
+# cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
+# cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")
+# colsCobra=colors[match(cobraNames,names(colors))]
+# cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
+# save(cobraplot,file="cobraplotIslam.rda")
+# plot_fdrtprcurve(cobraplot, pointsize=1)
+# 
+# #only common disp ZINB-WaVE, no ZINB-WaVE_limma-voom
+# pvalDfCommon2 = pvalDfCommon[,-grep(x=colnames(pvalDfCommon), pattern="ZINB-WaVE_limmavoom")]
+# padjDfCommon2 = padjDfCommon[,-grep(x=colnames(padjDfCommon), pattern="ZINB-WaVE_limmavoom")]
+# pp = COBRAData(pval = pvalDfCommon2,
+#                padj = padjDfCommon2,
+#                 truth = data.frame(status = trueDE))
+# cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
+# colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4", diffxpy_wald="dodgerblue")
+# #iCOBRA converts '-' to '.'. Redo this.
+# cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
+# cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")
+# colsCobra=colors[match(cobraNames,names(colors))]
+# cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
+# #save(cobraplot,file="cobraplotIslamNoLimma.rda")
+# plot_fdrtprcurve(cobraplot, pointsize=1) +xlab("FDP")
 
 
 
