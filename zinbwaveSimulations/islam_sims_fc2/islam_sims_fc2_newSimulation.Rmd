@@ -41,11 +41,17 @@ reticulate::py_available(TRUE)
 # bug in rstudio/reticulate: 
 matplotlib <- import("matplotlib")
 matplotlib$use("Agg", force = TRUE)
+set.seed(42)
 ```
 
 ```{python}
 import diffxpy.api as de
 import pandas as pd
+import numpy as np
+import scqtl
+from diffxpy.api.stats import wald_test, wald_test_chisq
+import diffxpy.api as de
+import statsmodels.api as sm
 ```
 
 
@@ -70,9 +76,9 @@ The scRNA-seq simulation is based on the Islam mouse dataset, which compares 48 
 data(islamEset, package = "zingeR")
 islamHlp=exprs(islamEset)[9:nrow(exprs(islamEset)),] #first 8 are spike-ins.
 cellType=pData(islamEset)[,"cellType"]
-# paramsIslam = getDatasetMoMPositive(counts = islamHlp)
-# save(paramsIslam, file="./paramsIslam.rda")
-load("./paramsIslam.rda")
+paramsIslam = getDatasetMoMPositive(counts = islamHlp)
+save(paramsIslam, file="./paramsIslam.rda")
+# load("./paramsIslam.rda")
 ```
 
 ```{r sims}
@@ -422,12 +428,153 @@ def wald_test(counts, group):
   )
   
 def lrt_test(counts, group):
+  test = de.test.lrt(
+    data=counts.values,
+    # TODO check what's correct. This is even inconsistent within diffxpy. 
+    full_formula_scale="~ 1",
+    full_formula_loc="~ 1 + group",
+    reduced_formula_scale="~ 1",
+    reduced_formula_loc="~ 1",
+    sample_description=pd.DataFrame().assign(group=group),
+    batch_size=100,
+    training_strategy="DEFAULT",
+    dtype="float64",
+    gene_names=counts.index
+  )
   
+def wald_test_counts(counts, group):
+  n_genes = np.sum(counts > 0, axis=1)
+  test = de.test.wald(
+    data=counts.values,
+    formula_loc="~ 1 + group + n_genes",
+    factor_loc_totest=["group"],
+    coef_to_test="group",
+    sample_description=pd.DataFrame().assign(group=pd.Categorical(group), n_genes=np.float64(n_genes.values)),
+    batch_size=100,
+    training_strategy="DEFAULT",
+    dtype="float64",
+    gene_names=counts.index
+  )
+  return pd.DataFrame().assign(
+    pval=test.pval,
+    padj=test.qval
+  )
+  
+def test_scqtl(counts, group):
+    umi = counts.values.T
+    num_samples = umi.shape[0]
+    size_factors = np.ones(len(group))
+    test = de.test.wald(
+        data=umi.astype(np.float64),
+        formula_loc="~ 1 + group",
+        factor_loc_totest="group",
+        sample_description=pd.DataFrame().assign(group=group),
+        batch_size=100,
+        training_strategy="DEFAULT",
+        dtype="float64",
+        size_factors=size_factors,
+        gene_names=counts.index
+    )
+    design = test.model_estim.input_data.design_loc
+    size_factor = size_factors.reshape(1, num_samples).T
+    onehot = np.ones((num_samples, 1))
+    init = scqtl.tf.fit(umi=umi.astype(np.float32), 
+         onehot=onehot.astype(np.float32),
+         design=design.astype(np.float32),
+         size_factor=size_factor.astype(np.float32),
+         learning_rate=1e-3,
+         max_epochs=8000,
+          verbose=True
+    )
+    res = scqtl.tf.fit(umi=umi.astype(np.float32), 
+         onehot=onehot.astype(np.float32),
+         design=design.astype(np.float32),
+         size_factor=size_factor.astype(np.float32),
+         learning_rate=1e-3,
+         max_epochs=8000,
+        warm_start=init[:3],
+          verbose=True
+    )
+    wald_zinb = wald_test(res[0][0, :], np.maximum(res[1][0, :], 1e-299))
+    return wald_zinb
+```
+
+```{python}
+import warnings
+import sys
+from multiprocessing import Pool
+warnings.filterwarnings('ignore')
+
+
+def _fit_model(data, model_class):
+    model = model_class.from_formula(
+        "gene ~ 1 + group", 
+         data,
+         missing='raise'
+    )
+    try:
+        res = model.fit(
+            method='nm',
+            disp=False,
+            maxiter=5000
+        )
+        test = res.wald_test("group[T.1]=0")
+        return test.pvalue
+    except: 
+        return np.nan
+
+    
+def fit_models(count_matrix, group, model_class):
+    p = Pool(32)
+    assert len(group) == count_matrix.shape[1]
+    _pvals = []
+    pvals = []
+    for i in range(count_matrix.shape[0]):   
+        if not i % 50: 
+            sys.stdout.write("model {}\r".format(i))
+            sys.stdout.flush()
+        data = pd.DataFrame().assign(gene=count_matrix.values[i, :]).assign(group=group)
+        _pvals.append(p.apply_async(_fit_model, (data, model_class)))
+    for i, r in enumerate(_pvals):
+        if not i % 50: 
+            sys.stdout.write("gene: {}\r".format(i))
+            sys.stdout.flush()
+        pvals.append(r.get())
+    p.close()
+    return np.array(pvals)
 ```
 
 ```{r}
 diffxpy_wald = function(counts, group, ylim = NULL, xlim=NULL) {
   res = py$wald_test(as.data.frame(t(counts)), group)
+}
+
+diffxpy_lrt = function(counts, group, ylim = NULL, xlim=NULL) {
+  res = py$lrt_test(as.data.frame(t(counts)), group)
+}
+
+diffxpy_wald_counts = function(counts, group, ylim = NULL, xlim=NULL) {
+  res = py$wald_test_counts(as.data.frame(t(counts)), group)
+}
+
+scqtl_wald = function(counts, group, ylim=NULL, xlim=NULL) {
+  pval = py$test_scqtl(as.data.frame(counts), group)
+  data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
+}
+
+statsmodels_nb = function(counts, group, ylim=NULL, xlim=NULL) {
+  pval = py$fit_models(as.data.frame(counts), group, py$sm$NegativeBinomial)
+  data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
+}
+
+statsmodels_zip = function(counts, group, ylim=NULL, xlim=NULL) {
+  pval = py$fit_models(as.data.frame(counts), group, py$sm$ZeroInflatedPoisson)
+  data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
+}
+  
+statsmodels_zinb = function(counts, group, ylim=NULL, xlim=NULL) {
+  pval = py$fit_models(as.data.frame(counts), group, py$sm$ZeroInflatedNegativeBinomialP)
+  data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
 }
 ```
 
@@ -491,17 +638,27 @@ load("./intermediate_res.rda")
 ```
 
 ```{r}
-tmp_res_wald = diffxpy_wald(counts=simDataIslam$counts, group=grp)
-res[["diffxpy_wald"]] = tmp_res_wald
+res[["diffxpy_wald"]] = diffxpy_wald(counts=simDataIslam$counts, group=grp)
+# res[["diffxpy_lrt"]] = diffxpy_lrt(counts=simDataIslam$counts, group=grp)
+```
 
+```{r}
+res[["statsmodels_nb"]] = statsmodels_nb(counts=simDataIslam$counts, group=grp)
+res[["statsmodels_zip"]] = statsmodels_zip(counts=simDataIslam$counts, group=grp)
+res[["statsmodels_zinb"]] = statsmodels_zinb(counts=simDataIslam$counts, group=grp)
+```
+
+```{r}
+# res[["scqtl"]] = scqtl_wald(counts=simDataIslam$counts, group=grp)
+# res[["scqtl"]] = dplyr::rename(res[['scqtl']], padj=qval)
 ```
 
 ```{r res}
 res = lapply(res, as.data.frame)
 names(res) = c(names(myfct), names(res)[5:length(res)])
 for(k in 1:length(res)) res[[k]]$padj[is.na(res[[k]]$padj)] = 1
-# load("resIslamFc2.rda")
-save(res, file="../../results/resIslamFc2.rda")
+# load("../../results/resIslamFc2.rda")
+save(res, file="../../results/resIslamFc2.tmp.rda")
 ```
 
 
@@ -562,7 +719,8 @@ abline(a=0,b=1)
 ## nDE, TPR, FDR (pvalue = 0.05)
 ```{r islamTableFC2, results = 'asis'}
 listRates = lapply(res, function(y){
-  nDE = sum(y$padj <= 0.05, na.rm = TRUE)
+  y = as.data.frame(y)
+  nDE = sum(y[['padj']] <= 0.05, na.rm = TRUE)
   TPR = mean(simDataIslam$indDE %in% which( y$padj <= 0.05))
   FDR = mean(which(y$padj <= 0.05) %in% simDataIslam$indNonDE)
   c(nDE = nDE, TPR = TPR, FDR = FDR)
@@ -593,7 +751,7 @@ pp = COBRAData(pval = as.data.frame(do.call(cbind, lapply(res, '[[', 1))),
                 truth = data.frame(status = trueDE))
 cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
 colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4",
-         diffxpy_wald="dodgerblue")
+         diffxpy_wald="dodgerblue", statsmodels_nb='darkseagreen', statsmodels_zip='steelblue', statsmodels_zinb='darkslategray3')
 #iCOBRA converts '-' to '.'. Redo this.
 cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
 cobraNames = gsub(x=cobraNames, pattern=".", fixed=TRUE, replacement="-")

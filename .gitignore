@@ -1,3 +1,6 @@
+.Rhistory
+.ipynb_checkpoints
+*.ipynb
 *.html
 *rda
 *.rds
