@@ -9,4 +9,7 @@ outs/
 *_cache*
 zinbwaveSimulations/tenX_sims_fc2/outs/*
 zinbwaveSimulations/islam_sims_fc2_thinning/islam_sims_fc2_thinning.Rmd
+.nextflow*
+work
+results
 
