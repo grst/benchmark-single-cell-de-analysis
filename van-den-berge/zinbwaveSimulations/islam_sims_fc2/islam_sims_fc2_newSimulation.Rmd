@@ -530,13 +530,13 @@ def fit_models(count_matrix, group, model_class):
     _pvals = []
     pvals = []
     for i in range(count_matrix.shape[0]):   
-        if not i % 50: 
+        if not i % 200: 
             sys.stdout.write("model {}\r".format(i))
             sys.stdout.flush()
         data = pd.DataFrame().assign(gene=count_matrix.values[i, :]).assign(group=group)
         _pvals.append(p.apply_async(_fit_model, (data, model_class)))
     for i, r in enumerate(_pvals):
-        if not i % 50: 
+        if not i % 200: 
             sys.stdout.write("gene: {}\r".format(i))
             sys.stdout.flush()
         pvals.append(r.get())
