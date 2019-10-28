@@ -665,7 +665,9 @@ save(res, file="resIslamFc2.tmp.rda")
 
 ## Compare weights estimates
 
-<!-- ```{r zingerEdgerWeights}
+<!---
+```
+r zingerEdgerWeights
 d=DGEList(simDataIslam$counts)
 d=suppressWarnings(calcNormFactors(d))
 design=model.matrix(~grp)
@@ -673,7 +675,8 @@ zingeR_edgeR_weights <- zeroWeightsLS(counts=d$counts, design=design,
                                       normalization="TMM", verbose = F)
 ```
 
-```{r zingerDESeq2Weights}
+```
+r zingerDESeq2Weights
 colData <- data.frame(grp = grp)
 design <- model.matrix(~ grp)
 zingeR_DESeq2_weights <- zeroWeightsLS(counts = counts, design = design,
@@ -853,7 +856,8 @@ hist = lapply(1:length(res), function(i){
 
 ## BCV plots on simulated dataset
 
-<!-- ```{r bcvSim} -->
+<!-- ```
+bcvSim -->
 <!-- dSim=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts))) -->
 <!-- dSim=estimateDisp(dSim,design=model.matrix(~grp),prior.df=0) -->
 

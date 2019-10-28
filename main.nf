@@ -14,10 +14,10 @@ process benchmark_islam {
 
     publishDir "results"
 
-    cpus 16
+    cpus 32
 
     """
-    reportsrender rmd notebook.Rmd benchmark_islam.html --cpus=${task.cpus}
+    reportsrender rmd notebook.Rmd benchmark_islam.html --cpus=4
     """
 }
 
