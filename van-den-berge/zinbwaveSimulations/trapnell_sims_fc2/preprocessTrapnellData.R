@@ -2,9 +2,9 @@
 library(MultiAssayExperiment)
 
 
-trapnellAssay72 <- readRDS("/Users/koenvandenberge/PhD_Data/singleCell/conquer/GSE52529-GPL11154.rds")
+trapnellAssay72 <- readRDS("../../../datasets/GSE52529-GPL11154.rds")
 trapnellAssay72 = updateObject(trapnellAssay72)
-trapnellAssay <- readRDS("/Users/koenvandenberge/PhD_Data/singleCell/conquer/GSE52529-GPL16791.rds")
+trapnellAssay <- readRDS("../../../datasets/GSE52529-GPL16791.rds")
 trapnellAssay = updateObject(trapnellAssay)
 trapnellAssay48 <- trapnellAssay[,colData(trapnellAssay)[,"characteristics_ch1.1"] == "hour post serum-switch: 48"]
 countsTrapnell72 <- round(assay(experiments(trapnellAssay72)$gene,"count"))

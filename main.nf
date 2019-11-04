@@ -1,27 +1,27 @@
 #!/usr/bin/env nextflow
 
 //use dsl2 to support modules.
-nextflow.preview.dsl=2
+/* nextflow.preview.dsl=2 */
 
 
-process benchmark_islam {
+datasets = Channel.from(['islam', 80], ['trapnell', 150])
+
+process run_benchmark {
     input:
-        file 'lib'
-        file 'notebook.Rmd'
+        set val(dataset), val(n_samples) from datasets
+        file 'lib' from file('analysis/lib')
+        file 'notebook.Rmd' from file('analysis/benchmark.Rmd')
 
     output:
-        file "benchmark_islam.html"
+        file "benchmark_${dataset}.html" into report
 
     publishDir "results"
 
     cpus 32
 
     """
-    reportsrender rmd notebook.Rmd benchmark_islam.html --cpus=4
+    reportsrender rmd notebook.Rmd benchmark_${dataset}.html --cpus=4 \
+        --params="dataset=${dataset} n_samples=${n_samples}"
     """
 }
 
-
-workflow {
-    benchmark_islam(file('analysis/lib'), file('analysis/benchmark_islam.Rmd'))
-}

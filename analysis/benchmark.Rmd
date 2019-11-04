@@ -9,9 +9,13 @@ output:
     toc: yes
     code_folding: hide
     toc_float: yes
+params:
+  dataset: 'islam'
+  n_samples: 80
 ---
 
-This document uses Fanny's original simulation code in `islam_sims_fc2.Rmd' and has been adapted by Koen to adopt the new simulation framework.
+This document uses Fanny's original simulation code in
+`islam_sims_fc2.Rmd` and has been adapted by Koen to adopt the new simulation framework.
 
 ```{r options, echo=FALSE, results="hide",message=FALSE, error=FALSE, include=FALSE, autodep=TRUE, warning=FALSE}
 # setwd("/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/")
@@ -38,10 +42,15 @@ library(cowplot)
 source("lib/simulationHelpFunctions_v7_diffInZero.R")
 knitr::knit_engines$set(python = reticulate::eng_python)
 reticulate::py_available(TRUE)
-# bug in rstudio/reticulate: 
+# bug in rstudio/reticulate:
 matplotlib <- import("matplotlib")
 matplotlib$use("Agg", force = TRUE)
 set.seed(42)
+```
+
+```{r}
+stopifnot(params$dataset %in% c("islam", "trapnell"))
+stopifnot(as.numeric(params$n_samples) >= 2)
 ```
 
 ```{python}
@@ -72,35 +81,79 @@ The scRNA-seq simulation is based on the Islam mouse dataset, which compares 48 
 ## Simulating from zingeR framework
 
 ```{r data}
-#code from https://github.com/statOmics/zingeR/blob/master/vignettes/zingeRVignette_v2.Rmd
-data(islamEset, package = "zingeR")
-islamHlp=exprs(islamEset)[9:nrow(exprs(islamEset)),] #first 8 are spike-ins.
-cellType=pData(islamEset)[,"cellType"]
-paramsIslam = getDatasetMoMPositive(counts = islamHlp)
-save(paramsIslam, file="./paramsIslam.rda")
+if(params$dataset == 'islam') {
+  #code from https://github.com/statOmics/zingeR/blob/master/vignettes/zingeRVignette_v2.Rmd
+  data(islamEset, package = "zingeR")
+  islamHlp=exprs(islamEset)[9:nrow(exprs(islamEset)),] #first 8 are spike-ins.
+  cellType=pData(islamEset)[,"cellType"]
+  paramsIslam = getDatasetMoMPositive(counts = islamHlp)
+  save(paramsIslam, file="./paramsIslam.rda")
+
+  # rename objects
+  dataset_hlp = islamHlp
+  dataset_params = paramsIslam
+  dataset_var = cellType
+
+  rm(islamHlp, paramsIslam, cellType)
+
+} else if(params$dataset == 'trapnell') {
+  # from 'preprocessTrapnellData.R'
+
+  trapnellAssay72 <- readRDS("../../../datasets/GSE52529-GPL11154.rds")
+  trapnellAssay72 = updateObject(trapnellAssay72)
+  trapnellAssay <- readRDS("../../../datasets/GSE52529-GPL16791.rds")
+  trapnellAssay = updateObject(trapnellAssay)
+  trapnellAssay48 <- trapnellAssay[,colData(trapnellAssay)[,"characteristics_ch1.1"] == "hour post serum-switch: 48"]
+  countsTrapnell72 <- round(assay(experiments(trapnellAssay72)$gene,"count"))
+  id48=colData(trapnellAssay)[,"characteristics_ch1.1"] == "hour post serum-switch: 48"
+  countsTrapnell48 <- round(assay(experiments(trapnellAssay)$gene[,id48],"count"))
+  #wells containing debris
+  debris72 = colData(trapnellAssay72)[,"characteristics_ch1.2"]=="debris: TRUE"
+  debris48 = colData(trapnellAssay48)[,"characteristics_ch1.2"]=="debris: TRUE"
+  #wells that did not contain one cell
+  one72 = colData(trapnellAssay72)[,"characteristics_ch1.4"]!="cells in well: 1"
+  one48 = colData(trapnellAssay48)[,"characteristics_ch1.4"]!="cells in well: 1"
+  # remove
+  countsTrapnell72 = countsTrapnell72[,(!debris72 & !one72)]
+  countsTrapnell48 = countsTrapnell48[,(!debris48 & !one48)]
+  countsTrapnell <- cbind(countsTrapnell48,countsTrapnell72)
+  countsTrapnell <- countsTrapnell[rowSums(countsTrapnell>0)>9,] #expression in at least 10 out of 149 samples. Remains 24,576 genes and 149 samples.
+  rm(trapnellAssay)
+
+  timePoint=factor(c(rep(48,85),rep(72,64)))
+  paramsTrapnell = getDatasetMoMPositive(counts = countsTrapnell)
+  save(paramsTrapnell, file="./paramsTrapnell.rda")
+
+  # rename objects
+  dataset_hlp = countsTrapnell
+  dataset_params = paramsTrapnell
+  dataset_var = timePoint
+
+  rm(countsTrapnell, paramsTrapnell, timePoint)
+}
 # load("./paramsIslam.rda")
 ```
 
 ```{r sims}
-nSamples=80
+nSamples=as.numeric(params$n_samples)
 grp=as.factor(rep(0:1, each = nSamples/2)) #two-group comparison
 nTags=10000 #nr of features
 set.seed(11)
 DEind = sample(1:nTags,floor(nTags*.1),replace=FALSE) #10% DE
 fcSim=(2 + rexp(length(DEind), rate = 1/2)) #fold changes
-libSizes=sample(colSums(islamHlp),nSamples,replace=TRUE) #library sizes
-simDataIslam <- NBsimSingleCell(foldDiff = fcSim, ind = DEind,
-                                dataset = islamHlp, nTags = nTags,
+libSizes=sample(colSums(dataset_hlp),nSamples,replace=TRUE) #library sizes
+sim_data <- NBsimSingleCell(foldDiff = fcSim, ind = DEind,
+                                dataset = dataset_hlp, nTags = nTags,
                                 group = grp,
-                                verbose = TRUE, params = paramsIslam,
+                                verbose = TRUE, params = dataset_params,
                                 lib.size = libSizes, normalizeLambda=TRUE)
-simDataIslam$counts[1:5,1:5]
+sim_data$counts[1:5,1:5]
 
 # BCV plots
-dOrig=suppressWarnings(edgeR::calcNormFactors(DGEList(islamHlp)))
-dOrig=estimateGLMTagwiseDisp(estimateGLMCommonDisp(dOrig, design=model.matrix(~cellType), interval=c(0,10)),prior.df=0)
+dOrig=suppressWarnings(edgeR::calcNormFactors(DGEList(dataset_hlp)))
+dOrig=estimateGLMTagwiseDisp(estimateGLMCommonDisp(dOrig, design=model.matrix(~dataset_var), interval=c(0,10)),prior.df=0)
 
-d=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts)))
+d=suppressWarnings(edgeR::calcNormFactors(DGEList(sim_data$counts)))
 d=estimateGLMTagwiseDisp(estimateGLMCommonDisp(d, design=model.matrix(~grp), interval=c(0,10)),prior.df=0)
 
 par(mfrow=c(1,2))
@@ -109,13 +162,13 @@ plotBCV(d,ylim=c(0,13), xlim=c(2,16), main="simulated dataset")
 par(mfrow=c(1,1))
 
 # association of library size with zeros
-plot(x=colSums(islamHlp), y=colMeans(islamHlp==0), xlab="Log library size", ylab="Fraction of zeros", ylim=c(0.2,1))
-points(x=colSums(simDataIslam$counts), y=colMeans(simDataIslam$counts==0), col=2)
+plot(x=colSums(dataset_hlp), y=colMeans(dataset_hlp==0), xlab="Log library size", ylab="Fraction of zeros", ylim=c(0.2,1))
+points(x=colSums(sim_data$counts), y=colMeans(sim_data$counts==0), col=2)
 legend("bottomleft", c("real", "simulated"), col=1:2, pch=1)
 
 # association of aveLogCPM with zeros
-plot(x=edgeR::aveLogCPM(islamHlp), y=rowMeans(islamHlp==0), xlab="Average log CPM", ylab="Fraction of zeros", ylim=c(0,1), col=alpha(1,1/2), pch=19, cex=.3)
-points(x=edgeR::aveLogCPM(simDataIslam$counts), y=rowMeans(simDataIslam$counts==0),col=alpha(2,1/2),pch=19,cex=.3)
+plot(x=edgeR::aveLogCPM(dataset_hlp), y=rowMeans(dataset_hlp==0), xlab="Average log CPM", ylab="Fraction of zeros", ylim=c(0,1), col=alpha(1,1/2), pch=19, cex=.3)
+points(x=edgeR::aveLogCPM(sim_data$counts), y=rowMeans(sim_data$counts==0),col=alpha(2,1/2),pch=19,cex=.3)
 legend("bottomleft", c("real", "simulated"), col=1:2, pch=16)
 
 ```
@@ -426,11 +479,11 @@ def wald_test(counts, group):
     pval=test.pval,
     padj=test.qval
   )
-  
+
 def lrt_test(counts, group):
   test = de.test.lrt(
     data=counts.values,
-    # TODO check what's correct. This is even inconsistent within diffxpy. 
+    # TODO check what's correct. This is even inconsistent within diffxpy.
     full_formula_scale="~ 1",
     full_formula_loc="~ 1 + group",
     reduced_formula_scale="~ 1",
@@ -441,7 +494,7 @@ def lrt_test(counts, group):
     dtype="float64",
     gene_names=counts.index
   )
-  
+
 def wald_test_counts(counts, group):
   n_genes = np.sum(counts > 0, axis=1)
   test = de.test.wald(
@@ -459,7 +512,7 @@ def wald_test_counts(counts, group):
     pval=test.pval,
     padj=test.qval
   )
-  
+
 def test_scqtl(counts, group):
     umi = counts.values.T
     num_samples = umi.shape[0]
@@ -478,7 +531,7 @@ def test_scqtl(counts, group):
     design = test.model_estim.input_data.design_loc
     size_factor = size_factors.reshape(1, num_samples).T
     onehot = np.ones((num_samples, 1))
-    init = scqtl.tf.fit(umi=umi.astype(np.float32), 
+    init = scqtl.tf.fit(umi=umi.astype(np.float32),
          onehot=onehot.astype(np.float32),
          design=design.astype(np.float32),
          size_factor=size_factor.astype(np.float32),
@@ -486,7 +539,7 @@ def test_scqtl(counts, group):
          max_epochs=8000,
           verbose=True
     )
-    res = scqtl.tf.fit(umi=umi.astype(np.float32), 
+    res = scqtl.tf.fit(umi=umi.astype(np.float32),
          onehot=onehot.astype(np.float32),
          design=design.astype(np.float32),
          size_factor=size_factor.astype(np.float32),
@@ -508,7 +561,7 @@ warnings.filterwarnings('ignore')
 
 def _fit_model(data, model_class):
     model = model_class.from_formula(
-        "gene ~ 1 + group", 
+        "gene ~ 1 + group",
          data,
          missing='raise'
     )
@@ -520,23 +573,23 @@ def _fit_model(data, model_class):
         )
         test = res.wald_test("group[T.1]=0")
         return test.pvalue
-    except: 
+    except:
         return np.nan
 
-    
+
 def fit_models(count_matrix, group, model_class):
     p = Pool(16)
     assert len(group) == count_matrix.shape[1]
     _pvals = []
     pvals = []
-    for i in range(count_matrix.shape[0]):   
-        if not i % 200: 
+    for i in range(count_matrix.shape[0]):
+        if not i % 200:
             sys.stdout.write("model {}\r".format(i))
             sys.stdout.flush()
         data = pd.DataFrame().assign(gene=count_matrix.values[i, :]).assign(group=group)
         _pvals.append(p.apply_async(_fit_model, (data, model_class)))
     for i, r in enumerate(_pvals):
-        if not i % 200: 
+        if not i % 200:
             sys.stdout.write("gene: {}\r".format(i))
             sys.stdout.flush()
         pvals.append(r.get())
@@ -571,7 +624,7 @@ statsmodels_zip = function(counts, group, ylim=NULL, xlim=NULL) {
   pval = py$fit_models(as.data.frame(counts), group, py$sm$ZeroInflatedPoisson)
   data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
 }
-  
+
 statsmodels_zinb = function(counts, group, ylim=NULL, xlim=NULL) {
   pval = py$fit_models(as.data.frame(counts), group, py$sm$ZeroInflatedNegativeBinomialP)
   data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
@@ -581,7 +634,7 @@ statsmodels_zinb = function(counts, group, ylim=NULL, xlim=NULL) {
 # Results
 
 ```{r core}
-core <- SummarizedExperiment(simDataIslam$counts,
+core <- SummarizedExperiment(sim_data$counts,
                              colData = data.frame(grp = grp))
 ```
 
@@ -599,7 +652,7 @@ save(zinb_g, file = 'zinb-genewise-disp-fc2.rda')
 
 # Compare dispersion estimates
 ```{r islamDispFC2, warning=FALSE}
-counts = simDataIslam$counts
+counts = sim_data$counts
 myfct = list(DESeq2 = DESeq2,
              edgeR = edgeR,
              limmavoom = limma,
@@ -630,26 +683,26 @@ res[['ZINB-WaVE_edgeR_common']]  = zinbwave_edgeR(counts, grp, zinb_c, ylim=ylim
 #res[['ZINB-WaVE_edgeR_genewise']]  = zinbwave_edgeR(counts, grp, zinb_g, ylim=ylim, main = 'ZINB-WaVE, genewise dispersion', xlim = xlim)
 #res[['ZINB-WaVE_limmavoom_genewise']]  = zinbwave_limma(counts, grp, zinb_g)
 #par(mfrow = c(1,1))
-res[["zingeR_edgeR"]] = zingeR_edgeR(counts=simDataIslam$counts, group=grp)
-#res[["zingeR_DESeq2"]] = zingeR_DESeq2(counts=simDataIslam$counts, group=grp)
+res[["zingeR_edgeR"]] = zingeR_edgeR(counts=sim_data$counts, group=grp)
+#res[["zingeR_DESeq2"]] = zingeR_DESeq2(counts=sim_data$counts, group=grp)
 
 save(res, file="./intermediate_res.rda")
 # load("./intermediate_res.rda")
 ```
 
 ```{r}
-res[["diffxpy_wald"]] = diffxpy_wald(counts=simDataIslam$counts, group=grp)
-# res[["diffxpy_lrt"]] = diffxpy_lrt(counts=simDataIslam$counts, group=grp)
+res[["diffxpy_wald"]] = diffxpy_wald(counts=sim_data$counts, group=grp)
+# res[["diffxpy_lrt"]] = diffxpy_lrt(counts=sim_data$counts, group=grp)
 ```
 
 ```{r}
-res[["statsmodels_nb"]] = statsmodels_nb(counts=simDataIslam$counts, group=grp)
-res[["statsmodels_zip"]] = statsmodels_zip(counts=simDataIslam$counts, group=grp)
-res[["statsmodels_zinb"]] = statsmodels_zinb(counts=simDataIslam$counts, group=grp)
+res[["statsmodels_nb"]] = statsmodels_nb(counts=sim_data$counts, group=grp)
+res[["statsmodels_zip"]] = statsmodels_zip(counts=sim_data$counts, group=grp)
+res[["statsmodels_zinb"]] = statsmodels_zinb(counts=sim_data$counts, group=grp)
 ```
 
 ```{r}
-# res[["scqtl"]] = scqtl_wald(counts=simDataIslam$counts, group=grp)
+# res[["scqtl"]] = scqtl_wald(counts=sim_data$counts, group=grp)
 # res[["scqtl"]] = dplyr::rename(res[['scqtl']], padj=qval)
 ```
 
@@ -668,7 +721,7 @@ save(res, file="resIslamFc2.tmp.rda")
 <!---
 ```
 r zingerEdgerWeights
-d=DGEList(simDataIslam$counts)
+d=DGEList(sim_data$counts)
 d=suppressWarnings(calcNormFactors(d))
 design=model.matrix(~grp)
 zingeR_edgeR_weights <- zeroWeightsLS(counts=d$counts, design=design,
@@ -682,7 +735,7 @@ design <- model.matrix(~ grp)
 zingeR_DESeq2_weights <- zeroWeightsLS(counts = counts, design = design,
                            normalization = "DESeq2_poscounts", colData = colData,
                            designFormula = ~grp, verbose = F)
-``` 
+```
 -->
 
 ```{r zinbwaveW}
@@ -724,8 +777,8 @@ abline(a=0,b=1)
 listRates = lapply(res, function(y){
   y = as.data.frame(y)
   nDE = sum(y[['padj']] <= 0.05, na.rm = TRUE)
-  TPR = mean(simDataIslam$indDE %in% which( y$padj <= 0.05))
-  FDR = mean(which(y$padj <= 0.05) %in% simDataIslam$indNonDE)
+  TPR = mean(sim_data$indDE %in% which( y$padj <= 0.05))
+  FDR = mean(which(y$padj <= 0.05) %in% sim_data$indNonDE)
   c(nDE = nDE, TPR = TPR, FDR = FDR)
 })
 
@@ -744,7 +797,7 @@ kable(df)
 ## TPR vs FDR
 ```{r truth}
 trueDE = rep(0, nTags)
-trueDE[simDataIslam$indDE] = 1
+trueDE[sim_data$indDE] = 1
 ```
 
 ```{r islamROCfc2}
@@ -780,7 +833,7 @@ plot_fdrtprcurve(cobraplot, pointsize=1)
 # cobraplot <- prepare_data_for_plot(cobraperf, colorscheme=colsCobra)
 # save(cobraplot,file="cobraplotIslam.rda")
 # plot_fdrtprcurve(cobraplot, pointsize=1)
-# 
+#
 # #only common disp ZINB-WaVE, no ZINB-WaVE_limma-voom
 # pvalDfCommon2 = pvalDfCommon[,-grep(x=colnames(pvalDfCommon), pattern="ZINB-WaVE_limmavoom")]
 # padjDfCommon2 = padjDfCommon[,-grep(x=colnames(padjDfCommon), pattern="ZINB-WaVE_limmavoom")]
@@ -858,12 +911,12 @@ hist = lapply(1:length(res), function(i){
 
 <!-- ```
 bcvSim -->
-<!-- dSim=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts))) -->
+<!-- dSim=suppressWarnings(edgeR::calcNormFactors(DGEList(sim_data$counts))) -->
 <!-- dSim=estimateDisp(dSim,design=model.matrix(~grp),prior.df=0) -->
 
 <!-- load('/Users/koenvandenberge/Dropbox/phdKoen/singleCell/zinbwaveZingerGithub/zinbwaveZinger/zinbwaveSimulations/islam_sims_fc2/zinb-common-disp-fc2-eps12.rda') -->
-<!-- w = computeObservationalWeights(zinb_c,simDataIslam$counts) -->
-<!-- dSimW=suppressWarnings(edgeR::calcNormFactors(DGEList(simDataIslam$counts))) -->
+<!-- w = computeObservationalWeights(zinb_c,sim_data$counts) -->
+<!-- dSimW=suppressWarnings(edgeR::calcNormFactors(DGEList(sim_data$counts))) -->
 <!-- dSimW$weights = w -->
 <!-- dSimW=estimateDisp(dSimW,design=model.matrix(~grp),prior.df=0) -->
 
