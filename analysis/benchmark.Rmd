@@ -191,6 +191,23 @@ edgeR <- function(counts, group, ylim = NULL, xlim = NULL){
 }
 ```
 
+
+```{r edgeR}
+edger_ngenes <- function(counts, group, ylim = NULL, xlim = NULL){
+  d <- DGEList(counts)
+  d <- suppressWarnings(edgeR::calcNormFactors(d))
+  cdr <- colSums(counts > 0)
+  design <- model.matrix(~ group + cdr)
+  d <- estimateDisp(d, design)
+  plotBCV(d, ylim = ylim, main = 'edgeR', xlim = xlim)
+  fit <- glmFit(d,design)
+  lrt <- glmLRT(fit, coef = 2)
+  pval <- lrt$table$PValue
+  padj <- p.adjust(pval, "BH")
+  cbind(pval = pval, padj = padj)
+}
+```
+
 ### DESeq2
 ```{r DESeq2}
 DESeq2 <- function(counts, group, ylim = NULL, xlim = NULL){
@@ -691,6 +708,10 @@ save(res, file="./intermediate_res.rda")
 ```
 
 ```{r}
+res[["edger_ngenes"]] = edger_ngenes(counts=sim_data$counts, group=grp)
+```
+
+```{r}
 res[["diffxpy_wald"]] = diffxpy_wald(counts=sim_data$counts, group=grp)
 # res[["diffxpy_lrt"]] = diffxpy_lrt(counts=sim_data$counts, group=grp)
 ```
@@ -806,7 +827,7 @@ pp = COBRAData(pval = as.data.frame(do.call(cbind, lapply(res, '[[', 1))),
                padj = as.data.frame(do.call(cbind, lapply(res, '[[', 2))),
                 truth = data.frame(status = trueDE))
 cobraperf <- calculate_performance(pp, binary_truth = "status", thrs = 0.05)
-colors=c(limmavoom="blue", "ZINB-WaVE_limmavoom_common"="steelblue", "ZINB-WaVE_limmavoom_genewise"="darkslategray3", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon", "ZINB-WaVE_edgeR_genewise"="deeppink2",  DESeq2="brown",  "ZINB-WaVE_DESeq2_common"="darkseagreen", "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4",
+colors=c(limmavoom="blue", "edger_ngenes2"="darkolivegreen4", "edger_ngenes"="deeppink2", edgeR="red", "ZINB-WaVE_edgeR_common"="salmon",  DESeq2="brown",  "ZINB-WaVE_DESeq2_genewise"="darkkhaki",  MAST="darkturquoise", metagenomeSeq="forestgreen", scde="grey", NODES="black",  Seurat="dodgerblue", "zingeR_edgeR"="hotpink1", zingeR_DESeq2="darkolivegreen4",
          diffxpy_wald="dodgerblue", statsmodels_nb='darkseagreen', statsmodels_zip='steelblue', statsmodels_zinb='darkslategray3')
 #iCOBRA converts '-' to '.'. Redo this.
 cobraNames = sort(names(cobraperf@overlap)[1:(ncol(cobraperf@overlap)-1)])
