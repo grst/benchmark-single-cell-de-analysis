@@ -29,6 +29,9 @@ Ideally, diffxpy could be extended to account for zero-inflation to achieve comp
   not support sample weights. Also zinb-WAVE/zingeR are quite slow and don't scale 
   to the 100k+ cells. 
   
-Next steps: 
-* test on a different dataset with more simulated samples. 
-* Why does the zero-inflation occor with the ZINB model? 
+## Next steps: 
+* check the performance of `edgeR` with `#detected genes` as covariate. 
+* contact diffxpy developers
+   - why does it complain about the matrix not being full-rank (even though it works with edgeR)
+   - what's their take on ZINB-models? 
+* Why does the FDR-inflation occor with the statsmodel ZINB model? 
