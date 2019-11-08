@@ -57,7 +57,7 @@ stopifnot(as.numeric(params$n_samples) >= 2)
 import diffxpy.api as de
 import pandas as pd
 import numpy as np
-import scqtl
+# import scqtl
 from diffxpy.api.stats import wald_test, wald_test_chisq
 import diffxpy.api as de
 import statsmodels.api as sm
@@ -192,7 +192,7 @@ edgeR <- function(counts, group, ylim = NULL, xlim = NULL){
 ```
 
 
-```{r edgeR}
+```{r edgeR_ngenes}
 edger_ngenes <- function(counts, group, ylim = NULL, xlim = NULL){
   d <- DGEList(counts)
   d <- suppressWarnings(edgeR::calcNormFactors(d))
@@ -516,7 +516,7 @@ def wald_test_counts(counts, group):
   n_genes = np.sum(counts > 0, axis=1)
   test = de.test.wald(
     data=counts.values,
-    formula_loc="~ 1 + group + n_genes",
+    formula_loc="~ group + n_genes",
     factor_loc_totest=["group"],
     coef_to_test="group",
     sample_description=pd.DataFrame().assign(group=pd.Categorical(group), n_genes=np.float64(n_genes.values)),
@@ -530,43 +530,43 @@ def wald_test_counts(counts, group):
     padj=test.qval
   )
 
-def test_scqtl(counts, group):
-    umi = counts.values.T
-    num_samples = umi.shape[0]
-    size_factors = np.ones(len(group))
-    test = de.test.wald(
-        data=umi.astype(np.float64),
-        formula_loc="~ 1 + group",
-        factor_loc_totest="group",
-        sample_description=pd.DataFrame().assign(group=group),
-        batch_size=100,
-        training_strategy="DEFAULT",
-        dtype="float64",
-        size_factors=size_factors,
-        gene_names=counts.index
-    )
-    design = test.model_estim.input_data.design_loc
-    size_factor = size_factors.reshape(1, num_samples).T
-    onehot = np.ones((num_samples, 1))
-    init = scqtl.tf.fit(umi=umi.astype(np.float32),
-         onehot=onehot.astype(np.float32),
-         design=design.astype(np.float32),
-         size_factor=size_factor.astype(np.float32),
-         learning_rate=1e-3,
-         max_epochs=8000,
-          verbose=True
-    )
-    res = scqtl.tf.fit(umi=umi.astype(np.float32),
-         onehot=onehot.astype(np.float32),
-         design=design.astype(np.float32),
-         size_factor=size_factor.astype(np.float32),
-         learning_rate=1e-3,
-         max_epochs=8000,
-        warm_start=init[:3],
-          verbose=True
-    )
-    wald_zinb = wald_test(res[0][0, :], np.maximum(res[1][0, :], 1e-299))
-    return wald_zinb
+# def test_scqtl(counts, group):
+#     umi = counts.values.T
+#     num_samples = umi.shape[0]
+#     size_factors = np.ones(len(group))
+#     test = de.test.wald(
+#         data=umi.astype(np.float64),
+#         formula_loc="~ 1 + group",
+#         factor_loc_totest="group",
+#         sample_description=pd.DataFrame().assign(group=group),
+#         batch_size=100,
+#         training_strategy="DEFAULT",
+#         dtype="float64",
+#         size_factors=size_factors,
+#         gene_names=counts.index
+#     )
+#     design = test.model_estim.input_data.design_loc
+#     size_factor = size_factors.reshape(1, num_samples).T
+#     onehot = np.ones((num_samples, 1))
+#     init = scqtl.tf.fit(umi=umi.astype(np.float32),
+#          onehot=onehot.astype(np.float32),
+#          design=design.astype(np.float32),
+#          size_factor=size_factor.astype(np.float32),
+#          learning_rate=1e-3,
+#          max_epochs=8000,
+#           verbose=True
+#     )
+#     res = scqtl.tf.fit(umi=umi.astype(np.float32),
+#          onehot=onehot.astype(np.float32),
+#          design=design.astype(np.float32),
+#          size_factor=size_factor.astype(np.float32),
+#          learning_rate=1e-3,
+#          max_epochs=8000,
+#         warm_start=init[:3],
+#           verbose=True
+#     )
+#     wald_zinb = wald_test(res[0][0, :], np.maximum(res[1][0, :], 1e-299))
+#     return wald_zinb
 ```
 
 ```{python}
@@ -627,10 +627,10 @@ diffxpy_wald_counts = function(counts, group, ylim = NULL, xlim=NULL) {
   res = py$wald_test_counts(as.data.frame(t(counts)), group)
 }
 
-scqtl_wald = function(counts, group, ylim=NULL, xlim=NULL) {
-  pval = py$test_scqtl(as.data.frame(counts), group)
-  data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
-}
+# scqtl_wald = function(counts, group, ylim=NULL, xlim=NULL) {
+#   pval = py$test_scqtl(as.data.frame(counts), group)
+#   data.frame(pval=pval, padj=p.adjust(pval, method="BH"))
+# }
 
 statsmodels_nb = function(counts, group, ylim=NULL, xlim=NULL) {
   pval = py$fit_models(as.data.frame(counts), group, py$sm$NegativeBinomial)
@@ -713,7 +713,17 @@ res[["edger_ngenes"]] = edger_ngenes(counts=sim_data$counts, group=grp)
 
 ```{r}
 res[["diffxpy_wald"]] = diffxpy_wald(counts=sim_data$counts, group=grp)
+# Does not work, assertion error. 
 # res[["diffxpy_lrt"]] = diffxpy_lrt(counts=sim_data$counts, group=grp)
+```
+
+```{r}
+# Does not work
+# Error in py_call_impl(callable, dots$args, dots$keywords) : 
+# ValueError: constrained design matrix is not full rank: 79 80
+
+# res[["diffxpy_wald_ngenes"]] = diffxpy_wald_counts(counts=sim_data$counts, group=grp)
+invisible() 
 ```
 
 ```{r}
