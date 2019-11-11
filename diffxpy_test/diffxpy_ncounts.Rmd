@@ -1,10 +1,10 @@
-I attempted to run diffxpy with the number of detected genes as a covariate. This has been 
-proposed to improve performance on single cell data by [Soneson et al., NMeth 2018](https://www.nature.com/articles/nmeth.4612#methods). 
+I attempted to run diffxpy with the number of detected genes as a covariate. This has been
+proposed to improve performance on single cell data by [Soneson et al., NMeth 2018](https://www.nature.com/articles/nmeth.4612#methods).
 
-Using that model, diffxpy fails reporting that the design matrix was not full rank. 
-However, the same design matrix runs flawlessly using edgeR. 
+Using that model, diffxpy fails reporting that the design matrix was not full rank.
+However, the same design matrix runs flawlessly using edgeR.
 
-Reproducible example: 
+Reproducible example:
 
 ```{r setup, include=FALSE}
 library(reticulate)
@@ -40,7 +40,7 @@ pval <- lrt$table$PValue
 padj <- p.adjust(pval, "BH")
 
 # result
-data.frame(pval = pval, padj = padj)
+head(data.frame(pval = pval, padj = padj))
 ```
 
 ## run diffxpy
@@ -50,20 +50,24 @@ obs = pd.read_csv("./obs.tsv", sep="\t")
 ```
 
 ```{python}
-test = de.test.wald(
-  data=counts.values.T,
-  formula_loc="~ 1 + group + n_genes",
-  factor_loc_totest=["group"],
-  coef_to_test="group",
-  sample_description=obs,
-  batch_size=100,
-  training_strategy="DEFAULT",
-  dtype="float64",
-  gene_names=counts.index
-)
+try:
+  test = de.test.wald(
+    data=counts.values.T,
+    formula_loc="~ 1 + group + n_genes",
+    factor_loc_totest=["group"],
+    coef_to_test="group",
+    sample_description=obs,
+    batch_size=100,
+    training_strategy="DEFAULT",
+    dtype="float64",
+    gene_names=counts.index
+  )
 
-pd.DataFrame().assign(
-  pval=test.pval,
-  padj=test.qval
-)
+  pd.DataFrame().assign(
+    pval=test.pval,
+    padj=test.qval
+  )
+except Exception as e:
+  import traceback
+  traceback.print_exc()
 ```

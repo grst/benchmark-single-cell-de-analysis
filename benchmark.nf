@@ -1,6 +1,5 @@
 #!/usr/bin/env nextflow
 
-// tuples; [dataset, number of simulated samples/cells]
 datasets = Channel.value([['islam', 80], ['trapnell', 150]])
 
 /**
@@ -10,7 +9,7 @@ datasets = Channel.value([['islam', 80], ['trapnell', 150]])
  */
 process install_zinger_0613 {
     conda "envs/benchmark_diffxpy_0.6.13.yml"
-    executor local
+    executor "local"
 
     output:
         val "installed" into installed_zinger_0613
@@ -21,7 +20,7 @@ process install_zinger_0613 {
 }
 process install_zinger_071 {
     conda "envs/benchmark_diffxpy_0.7.1.yml"
-    executor local
+    executor "local"
 
     output:
         val "installed" into installed_zinger_071
@@ -75,20 +74,3 @@ process run_benchmark_diffxpy_0613 {
     """
 }
 
-
-process run_diffxpy_ncounts {
-    conda "envs/diffxpy_ncounts.yml"
-    publishDir "results/diffxpy_ncounts"
-    cpus 4
-
-    input:
-        file 'notebook.Rmd' from file('diffxpy_test/diffxpy_ncounts.Rmd')
-        file "*" from Channel.fromPath("diffxpy_test/*.tsv")
-
-    output:
-        file "diffxpy_ncounts.html" into diffxpy_ncounts_html
-
-    """
-    reportsrender notebook.Rmd diffxpy_ncounts.html --cpus=${task.cpus}
-    """
-}

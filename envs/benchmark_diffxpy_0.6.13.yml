@@ -1,4 +1,4 @@
-name: zinbwavezinger
+name: /home/sturm/projects/2019/zinbwaveZinger/work/conda/zinbwavezinger-a9754a3992265e758d80763df15636e8
 channels:
   - conda-forge
   - bioconda
@@ -426,7 +426,7 @@ dependencies:
   - pip:
     - ansiwrap==0.8.4
     - attrs==19.3.0
-    - batchglm==0.7.1
+    - batchglm==0.6.8
     - bleach==3.1.0
     - click==7.0
     - cloudpickle==1.1.1
@@ -458,5 +458,5 @@ dependencies:
     - textwrap3==0.9.2
     - toolz==0.10.0
     - webencodings==0.5.1
-prefix: /home/sturm/.conda/envs/zinbwavezinger
+prefix: /home/sturm/projects/2019/zinbwaveZinger/work/conda/zinbwavezinger-a9754a3992265e758d80763df15636e8
 
