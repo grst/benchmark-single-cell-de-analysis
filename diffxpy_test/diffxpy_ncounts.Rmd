@@ -50,24 +50,21 @@ obs = pd.read_csv("./obs.tsv", sep="\t")
 ```
 
 ```{python}
-try:
-  test = de.test.wald(
-    data=counts.values.T,
-    formula_loc="~ 1 + group + n_genes",
-    factor_loc_totest=["group"],
-    coef_to_test="group",
-    sample_description=obs,
-    batch_size=100,
-    training_strategy="DEFAULT",
-    dtype="float64",
-    gene_names=counts.index
-  )
+test = de.test.wald(
+  data=counts.values.T,
+  formula_loc="~ 1 + group + n_genes",
+  factor_loc_totest=["group"],
+ #  coef_to_test="group",
+  sample_description=obs,
+  batch_size=100,
+  training_strategy="DEFAULT",
+  dtype="float64",
+  gene_names=counts.index,
+  as_numeric=['n_genes']
+)
 
-  pd.DataFrame().assign(
-    pval=test.pval,
-    padj=test.qval
-  )
-except Exception as e:
-  import traceback
-  traceback.print_exc()
+pd.DataFrame().assign(
+  pval=test.pval,
+  padj=test.qval
+)
 ```

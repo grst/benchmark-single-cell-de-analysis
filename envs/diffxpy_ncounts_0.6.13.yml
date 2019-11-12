@@ -17,8 +17,8 @@ dependencies:
   - scanpy
   - anndata
   - pip:
-    - batchglm
-    - diffxpy==0.7.1
+    - batchglm==0.6.8
+    - diffxpy==0.6.13
     - tensorflow<2
 prefix: /home/sturm/projects/2019/zinbwaveZinger/work/conda/diffxpy_test-bf5ddff8c39a3368b22c8ee2c4730f1c
 
