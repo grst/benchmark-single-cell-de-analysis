@@ -13,6 +13,7 @@
 # ---
 
 from nxfvars import nxf
+
 cpus = nxf.task("cpus", "16")
 
 # %env MKL_NUM_THREADS={cpus}
@@ -27,6 +28,7 @@ import scanpy as sc
 import diffxpy.api as de
 import batchglm
 import diffxpy
+import pandas as pd
 
 print(batchglm.__version__)
 print(diffxpy.__version__)
@@ -34,12 +36,13 @@ print(diffxpy.__version__)
 adata = sc.read_h5ad(nxf.input("adata", "../../data/adata-myeloid.h5ad"))
 output_file = nxf.input("output_file", "/dev/null")
 
-sc.pp.subsample(adata, n_obs=50)
+# sc.pp.subsample(adata, n_obs=50)
 
 # %%time
 # pairwise test does not support covariates, plus it's only a loop anyway.
 results = []
-for group in adata.obs["leiden"].unique():
+groups = adata.obs["leiden"].unique()
+for group in groups:
     adata.obs[f"is_leiden_{group}"] = adata.obs["leiden"] == group
     results.append(
         de.test.wald(
@@ -50,10 +53,11 @@ for group in adata.obs["leiden"].unique():
         )
     )
 
-res = pd.concat([
-    r.summary().assign(comparison = f"{group} vs. Rest") for group,r in zip(groups, results)
-])
+res = pd.concat(
+    [
+        r.summary().assign(comparison=f"{group} vs. Rest")
+        for group, r in zip(groups, results)
+    ]
+)
 
 res.to_csv(output_file)
-
-

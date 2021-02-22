@@ -14,3 +14,7 @@ work
 results
 deploy
 data
+rik_kernel*
+__pycache__
+*.pyc
+*.pyo

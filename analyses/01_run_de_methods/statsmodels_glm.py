@@ -57,7 +57,7 @@ models = process_map(
     range(adata.shape[1]),
     itertools.repeat(adata),
     chunksize=1000,
-    max_workers=nxf.task("cpus", "16"),
+    max_workers=int(nxf.task("cpus", "16")),
     tqdm_class=tqdm,
 )
 
